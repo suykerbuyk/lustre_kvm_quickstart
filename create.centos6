@@ -1,0 +1,149 @@
+#!/bin/sh
+
+KICKSTART_FILE="$PWD/ks-base-centos6.cfg"
+BOOTSTRAP_URL="http://syke-01A/centos/6.6/os/x86_64/"
+#BOOTSTRAP_URL="http://mirror.centos.org/centos/6.6/os/x86_64/"
+
+INSTALL_URL="http://syke-01A/centos/6.6/os/x86_64/"
+#INSTALL_URL="http://mirror.centos.org/centos/6.6/os/x86_64/"
+VM_NAME=$1
+
+# Some default data disk sizes based on role (in gigabytes).
+DEFAULT_DATA_DISK_SIZE=1
+MDT_DATA_DISK_SIZE=$DEFAULT_DATA_DISK_SIZE
+MDS_DATA_DISK_SIZE=$DEFAULT_DATA_DISK_SIZE
+OSS_DATA_DISK_SIZE=15
+
+DATA_DISK_SIZE=$DEFAULT_DATA_DISK_SIZE
+SYS_DISK_SIZE=15
+
+# Common exit point for the script
+die_badly() {
+	echo "Something went wrong..."
+	exit 1
+}
+
+# Checks to see if a directory is mounted
+is_mounted() {
+	mount | grep "$1" >/dev/null
+	[ $? -eq 0 ] && echo 1 && return 1
+	echo 0 && return 0
+}
+
+# Remove any existing floppy image artifacts.
+clean_up_floppy_image() {
+	if [ -d "$FLOPPY_DISK_IMAGE_DIR" ]
+	then
+		if [ $(is_mounted "$FLOPPY_DISK_IMAGE_DIR") -eq 1 ]
+		then
+			echo Unmounting $FLOPPY_DISK_IMAGE_DIR
+			sudo umount "$FLOPPY_DISK_IMAGE_DIR" || die_badly
+		fi
+		rm -rf "$FLOPPY_DISK_IMAGE_DIR" || die_badly
+	fi
+	if [ -f "$FLOPPY_DISK_IMAGE_FILE" ]
+	then
+		rm -rf "$FLOPPY_DISK_IMAGE_FILE" || die_badly
+	fi
+}
+# Create the floppy image to hold our kickstart file
+create_floppy_image() {
+	mkdir -p "$FLOPPY_DISK_IMAGE_DIR" || die_badly
+	qemu-img create -f raw "$FLOPPY_DISK_IMAGE_FILE" 1440k || die_badly
+	mkfs.msdos -s 1 "$FLOPPY_DISK_IMAGE_FILE" || die_badly
+	sudo mount -o loop,uid=$CURRENT_UID,gid=$CURRENT_GID \
+		"$FLOPPY_DISK_IMAGE_FILE" \
+		"$FLOPPY_DISK_IMAGE_DIR" \
+		|| die_badly
+}
+
+# Verify we have our kickstart file
+if [ ! -f "$KICKSTART_FILE" ]
+then
+	echo "Missing Kickstart file: $KICKSTART_FILE"
+	die_badly
+fi
+if [ $# == 0 ]
+then
+	echo -n "Enter a name for the new Centos 6 VM: "
+	read VM_NAME
+fi
+
+DISK_PATH="$PWD/disk"
+FLOPPY_DISK_IMAGE_FILE="$DISK_PATH/$VM_NAME-floppy.img"
+FLOPPY_DISK_IMAGE_DIR="$DISK_PATH/$VM_NAME-floppy.dir"
+CURRENT_UID=`id -u`
+CURRENT_GID=`id -g`
+
+
+echo "Creating new VM with the name: $VM_NAME"
+echo "Preparing kickstart floppy disk image, root permissions will be required."
+# Give this VM the same network name as its VM Name.
+sed -i "s/network.*--hostname=.*/network  --hostname=$VM_NAME/g" ks-base-centos6.cfg
+if [ ! -d "$DISK_PATH" ]
+then
+	mkdir -p "DISK_PATH" || die_badly
+fi
+clean_up_floppy_image
+create_floppy_image
+cp ks-base-centos6.cfg "$FLOPPY_DISK_IMAGE_DIR/ks.cfg" || die_badly
+sudo umount "$FLOPPY_DISK_IMAGE_DIR"
+rm -rf "$FLOPPY_DISK_IMAGE_DIR"
+
+case "$VM_NAME" in
+	*oss*)
+		echo Configuring for OSS
+		DATA_DISK_SIZE=$OSS_DATA_DISK_SIZE
+		;;
+	*mdt*)
+		echo Configuring for MDT
+		DATA_DISK_SIZE=$MDS_DATA_DISK_SIZE
+		;;
+	*mgs*)
+		echo Configuring for MGS
+		DATA_DISK_SIZE=$MDS_DATA_DISK_SIZE
+		;;
+	*ost*)
+		echo Configuring for OST
+		DATA_DISK_SIZE=$OSS_DATA_DISK_SIZE
+		;;
+	*client*)
+		echo Configuring for client
+		DATA_DISK_SIZE=$DEFAULT_DATA_DISK_SIZE
+		;;
+	*)
+		echo Don\'t know what to do with $1
+		DATA_DISK_SIZE=$DEFAULT_DATA_DISK_SIZE
+		;;
+esac
+
+sudo virt-install \
+	--connect qemu:///system \
+	--name $VM_NAME \
+	--virt-type=kvm \
+	--memory 2048 \
+	--vcpus=1 \
+	--disk device=floppy,path="$FLOPPY_DISK_IMAGE_FILE" \
+	--disk device=disk,path="$DISK_PATH/$VM_NAME-sys.raw",size=$SYS_DISK_SIZE,format=raw \
+	--disk device=disk,path="$DISK_PATH/$VM_NAME-data.raw",size=$DATA_DISK_SIZE,format=raw \
+	--os-variant rhel6.6 \
+	--location "$BOOTSTRAP_URL" \
+	--noautoconsole \
+	--graphics vnc,listen=0.0.0.0 \
+	--accelerate \
+	--network=bridge:br0 \
+	--network=bridge:br0 \
+	--extra-args=="console=tty0 console=ttyS0,115200 ksdevice=eth0 ks=hd:fd0:/ks.cfg" \
+	--hvm || exit 1
+
+#	--location http://mirror.centos.org/centos/6.6/os/x86_64/ \
+sudo virsh console $VM_NAME
+
+echo "Use:"
+echo "  sudo virsh start $VM_NAME --console"
+echo "To start the $VM_NAME, or the following to attach to a running instance:"
+echo "  sudo virsh console $VM_NAME"
+echo "To force a shutdown of $VM_NAME:"
+echo "  sudo virsh destroy $VM_NAME"
+echo "And to completely remove it from this host:"
+echo "  sudo virsh undefine $VM_NAME --remove-all-storage"
