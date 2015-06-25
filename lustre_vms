@@ -1,0 +1,102 @@
+#!/bin/sh
+
+die_badly() {
+	echo Can not continue
+	exit 1
+}
+
+usage() {
+	echo $0 connect - splits the current TMUX console into four sessions and connects to VMS
+	echo $0 create  - creates a new Lustre VM clustre
+	echo $0 destroy - completely destroys all lustre vms
+	echo $0 yank    - shutdown by yanking power
+	echo $0 start   - starts all vms with lustre in their name
+	echo $0 stop    - stops all active vms with lustre in their name
+	echo $0 status  - list all active vms with lustre in their name
+}
+
+if [ $# -eq 0 ]
+then
+	usage
+	die_badly
+fi
+
+inactive_vms() {
+	sudo virsh list --inactive --name | grep $1
+}
+active_vms() {
+	sudo virsh list --state-running --name | grep $1
+}
+all_vms() {
+	sudo virsh list --all --name | grep $1
+}
+connect() {
+	tmux splitw -h -p 50  "ssh root@lustre_mgs_mdt -i vm-ssh-key"
+	tmux splitw  -p 50 "ssh root@lustre_oss1 -i vm-ssh-key"
+	tmux selectp -t 0
+	tmux split -p 50 "ssh root@lustre_oss2 -i vm-ssh-key"
+	tmux selectp -t 0
+	ssh root@lustre_client1 -i vm-ssh-key
+}
+
+case $1 in
+	sta* )
+	for vm in $(inactive_vms lustre)
+	do
+		sudo virsh start $vm || die_badly
+	done
+	exit 0
+	;;
+	destroy )
+	for vm in $(inactive_vms lustre)
+	do
+		sudo virsh undefine $vm --remove-all-storage || die_badly
+	done
+	exit 0
+	;;
+	yank )
+	for vm in $(active_vms lustre)
+	do
+		sudo virsh destroy $vm || die_badly
+	done
+	exit 0
+	;;
+	create )
+#		sudo ./create.centos6 lustre_mgs_mdt || die_badly
+#		sudo ./create.centos6 lustre_oss1 || die_badly
+#		sudo ./create.centos6 lustre_oss2 || die_badly
+#		sudo ./create.centos6 lustre_client1 || die_badly
+		tmux split -p 80 "sudo ./create.centos6 lustre_mgs_mdt"
+		tmux split -p 66 "sleep 5; sudo ./create.centos6 lustre_oss1"
+		tmux split -p 50 "sleep 10; sudo ./create.centos6 lustre_oss2"
+		sleep 15;
+		sudo ./create.centos6 lustre_client1
+	exit 0
+	;;
+	con* )
+		connect
+	exit 0
+	;;
+	all* )
+		all_vms lustre
+	exit 0
+	;;
+	run* )
+		active_vms lustre
+	exit 0
+	;;
+	sto* )
+	for vm in $(active_vms lustre)
+	do
+		sudo virsh shutdown $vm || die_badly
+	done
+	exit 0
+	;;
+	* )
+	echo Command option not understood: $1
+	usage
+	die_badly
+esac
+
+
+
