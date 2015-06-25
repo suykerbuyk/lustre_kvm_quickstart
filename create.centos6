@@ -1,11 +1,11 @@
 #!/bin/sh
 
 KICKSTART_FILE="$PWD/ks-base-centos6.cfg"
-BOOTSTRAP_URL="http://syke-01A/centos/6.6/os/x86_64/"
-#BOOTSTRAP_URL="http://mirror.centos.org/centos/6.6/os/x86_64/"
+#BOOTSTRAP_URL="http://syke-01A/centos/6.6/os/x86_64/"
+BOOTSTRAP_URL="http://mirror.centos.org/centos/6.6/os/x86_64/"
 
-INSTALL_URL="http://syke-01A/centos/6.6/os/x86_64/"
-#INSTALL_URL="http://mirror.centos.org/centos/6.6/os/x86_64/"
+#INSTALL_URL="http://syke-01A/centos/6.6/os/x86_64/"
+INSTALL_URL="http://mirror.centos.org/centos/6.6/os/x86_64/"
 VM_NAME=$1
 
 # Some default data disk sizes based on role (in gigabytes).
