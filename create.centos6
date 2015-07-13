@@ -17,6 +17,74 @@ OSS_DATA_DISK_SIZE=15
 DATA_DISK_SIZE=$DEFAULT_DATA_DISK_SIZE
 SYS_DISK_SIZE=15
 
+NETWORK_DEV="enp5s0f0"
+
+which qemu-img
+if [ $? != 0 ]
+then
+	echo qemu-img is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y qemu-img || exit 1
+fi
+which mkfs.msdos
+if [ $? != 0 ]
+then
+	echo dosfstools is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y dosfstools || exit 1
+fi
+which virt-install
+if [ $? != 0 ]
+then
+	echo virt-install is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y virt-install || exit 1
+fi
+yum list installed libvirt
+if [ $? != 0 ]
+then
+	echo libvirt is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y libvirt libvirt-docs || exit 1
+	sudo service libvirtd restart
+fi
+yum list installed qemu-kvm
+if [ $? != 0 ]
+then
+	echo qemu-kvm is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y qemu-kvm || exit 1
+fi
+yum list installed qemu-kvm-tools
+if [ $? != 0 ]
+then
+	echo qemu-kvm-tools is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y qemu-kvm-tools || exit 1
+fi
+yum list installed qemu-kvm-common
+if [ $? != 0 ]
+then
+	echo qemu-kvm-common is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y qemu-kvm-common || exit 1
+fi
+yum list installed libvirt-daemon-kvm
+if [ $? != 0 ]
+then
+	echo libvirt-daemon-kvm is not yet installed, installing now - root credentials required
+	echo ctrl-c to quit, return to contine
+	read a
+	sudo yum install -y libvirt-daemon-kvm || exit 1
+fi
+
 # Common exit point for the script
 die_badly() {
 	echo "Something went wrong..."
@@ -82,7 +150,7 @@ echo "Preparing kickstart floppy disk image, root permissions will be required."
 sed -i "s/network.*--hostname=.*/network  --hostname=$VM_NAME/g" ks-base-centos6.cfg
 if [ ! -d "$DISK_PATH" ]
 then
-	mkdir -p "DISK_PATH" || die_badly
+	mkdir -p "$DISK_PATH" || die_badly
 fi
 clean_up_floppy_image
 create_floppy_image
@@ -131,9 +199,8 @@ sudo virt-install \
 	--noautoconsole \
 	--graphics vnc,listen=0.0.0.0 \
 	--accelerate \
-	--network=bridge:br0 \
-	--network=bridge:br0 \
-	--extra-args=="console=tty0 console=ttyS0,115200 ksdevice=eth0 ks=hd:fd0:/ks.cfg" \
+	--network=bridge:virbr0 \
+	--extra-args=="console=tty0 console=ttyS0,115200 ksdevice="$NETWORK_DEV" ks=hd:fd0:/ks.cfg" \
 	--hvm || exit 1
 
 #	--location http://mirror.centos.org/centos/6.6/os/x86_64/ \
