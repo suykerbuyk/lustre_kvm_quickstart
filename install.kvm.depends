@@ -1,0 +1,12 @@
+#!/bin/sh
+sudo yum install -y \
+	dosfstools \
+	libvirt \
+	libvirt-daemon-kvm \
+	libvirt-docs \
+	qemu-img \
+	qemu-kvm \
+	qemu-kvm-common \
+	qemu-kvm-tools \
+	virt-install \
+	|| exit 1
