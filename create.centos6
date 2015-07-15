@@ -19,75 +19,10 @@ SYS_DISK_SIZE=15
 
 NETWORK_DEV="enp5s0f0"
 
-which qemu-img
-if [ $? != 0 ]
-then
-	echo qemu-img is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y qemu-img || exit 1
-fi
-which mkfs.msdos
-if [ $? != 0 ]
-then
-	echo dosfstools is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y dosfstools || exit 1
-fi
-which virt-install
-if [ $? != 0 ]
-then
-	echo virt-install is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y virt-install || exit 1
-fi
-yum list installed libvirt
-if [ $? != 0 ]
-then
-	echo libvirt is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y libvirt libvirt-docs || exit 1
-	sudo service libvirtd restart
-fi
-yum list installed qemu-kvm
-if [ $? != 0 ]
-then
-	echo qemu-kvm is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y qemu-kvm || exit 1
-fi
-yum list installed qemu-kvm-tools
-if [ $? != 0 ]
-then
-	echo qemu-kvm-tools is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y qemu-kvm-tools || exit 1
-fi
-yum list installed qemu-kvm-common
-if [ $? != 0 ]
-then
-	echo qemu-kvm-common is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y qemu-kvm-common || exit 1
-fi
-yum list installed libvirt-daemon-kvm
-if [ $? != 0 ]
-then
-	echo libvirt-daemon-kvm is not yet installed, installing now - root credentials required
-	echo ctrl-c to quit, return to contine
-	read a
-	sudo yum install -y libvirt-daemon-kvm || exit 1
-fi
-
 # Common exit point for the script
 die_badly() {
 	echo "Something went wrong..."
+	echo "If a command was not found, trying running the install.kvm.depends script"
 	exit 1
 }
 
