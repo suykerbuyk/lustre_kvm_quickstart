@@ -1,0 +1,76 @@
+#!/bin/sh
+
+
+INSTALL_BASE_URL='http://50.16.193.167:8082/repo'
+INSTALL_BRANCH='C-OSAINT'
+INSTALL_URI="$INSTALL_BASE_URL/os6_base/$INSTALL_BRANCH"
+KICKSTART_PATH="$PWD"
+KICKSTART_FILE="ks-base-centos7.cfg"
+KICKSTART_URI="$KICKSTART_PATH/$KICKSTART_FILE"
+
+echo INSTALL_URI=$INSTALL_URI
+echo KICKSTART_URI=$KICKSTART_URI
+
+VM_NAME=$1
+
+# Some default data disk sizes based on role (in gigabytes).
+DEFAULT_DATA_DISK_SIZE=10
+DATA_DISK_SIZE=$DEFAULT_DATA_DISK_SIZE
+SYS_DISK_SIZE=15
+
+# Common exit point for the script
+die_badly() {
+	echo "Something went wrong..."
+	echo "If a command was not found, trying running the install.kvm.depends script"
+	exit 1
+}
+
+# Verify we have our kickstart file
+if [ ! -f "$KICKSTART_URI" ]
+then
+	echo "Missing Kickstart file: $KICKSTART_FILE"
+	die_badly
+fi
+if [ $# == 0 ]
+then
+	echo A unique name is required for the VM.
+	echo Optionally it can be supplied as the first parmaeter to this script.
+	echo -n "Enter a name for the new VM: "
+	read VM_NAME
+fi
+
+DISK_PATH="$PWD/disk"
+
+echo "Creating new VM with the name: $VM_NAME"
+sed -i "s/network.*/network  --bootproto=dhcp --device=link --ipv6=auto --activate --hostname=$VM_NAME/g" "$KICKSTART_URI"
+sed -i "s|url.*|url --url=$INSTALL_URI|g" "$KICKSTART_URI"
+sudo virt-install \
+	--connect qemu:///system \
+	--name $VM_NAME \
+	--virt-type=kvm \
+	--memory 2048 \
+	--vcpus=1 \
+	--disk device=disk,path="$DISK_PATH/$VM_NAME-sys.raw",size=$SYS_DISK_SIZE,format=raw \
+	--disk device=disk,path="$DISK_PATH/$VM_NAME-data.raw",size=$DATA_DISK_SIZE,format=raw \
+	--os-variant rhel7 \
+	--location "$PWD/iso/centos7boot.iso" \
+	--initrd-inject=$KICKSTART_URI \
+	--noautoconsole \
+	--graphics vnc,listen=0.0.0.0 \
+	--accelerate \
+	--network=bridge:virbr0 \
+	--extra-args=="ksdevice=link ks=file://$KICKSTART_FILE text console=tty0 console=ttyS0,115200 serial" \
+	--hvm || exit 1
+
+sudo virsh console $VM_NAME
+
+echo "Use:"
+echo "  sudo virsh start $VM_NAME --console"
+echo "To start the $VM_NAME, or the following to attach to a running instance:"
+echo "  sudo virsh console $VM_NAME"
+echo "To force a shutdown of $VM_NAME:"
+echo "  sudo virsh destroy $VM_NAME"
+echo "And to completely remove it from this host:"
+echo "  sudo virsh undefine $VM_NAME --remove-all-storage"
+
+
