@@ -1,15 +1,27 @@
 #!/bin/sh
 
+REPO_POPEYE_ADDR='http://10.76.49.14:8082/repo'
+REPO_POPEYE_NAME='http://popeye.xyus.xyratex.com:8082/repo'
+REPO_HAVANT_ADDR='http://10.22.160.112:8082/repo'
+REPO_HAVANT_NAME='http://reposerver-uk.xy01.xyratex.com/repo'
 
-INSTALL_BASE_URL='http://50.16.193.167:8082/repo'
+
+INSTALL_BASE_URL="$REPO_HAVANT_ADDR"
 INSTALL_BRANCH='C-OSAINT'
 INSTALL_URI="$INSTALL_BASE_URL/os6_base/$INSTALL_BRANCH"
+
+BOOT_ISO_PATH="$PWD/iso"
+BOOT_ISO_FILE="$BOOT_ISO_PATH/centos7boot.iso"
+BOOT_ISO_URL="$INSTALL_URI/images/boot.iso"
+
 KICKSTART_PATH="$PWD"
 KICKSTART_FILE="ks-base-centos7.cfg"
 KICKSTART_URI="$KICKSTART_PATH/$KICKSTART_FILE"
 
-echo INSTALL_URI=$INSTALL_URI
-echo KICKSTART_URI=$KICKSTART_URI
+
+echo INSTALL_URI    = $INSTALL_URI
+echo KICKSTART_URI  = $KICKSTART_URI
+
 
 VM_NAME=$1
 
@@ -31,6 +43,15 @@ then
 	echo "Missing Kickstart file: $KICKSTART_FILE"
 	die_badly
 fi
+# Verify we have our boot iso
+if [ ! -f "$BOOT_ISO_FILE" ]
+then
+	if [ ! -d $BOOT_ISO_PATH ]
+	then
+		mkdir -p "$BOOT_ISO_PATH" || die_badly
+	fi
+	wget "$BOOT_ISO_URL" -O "$BOOT_ISO_FILE" || die_badly
+fi
 if [ $# == 0 ]
 then
 	echo A unique name is required for the VM.
@@ -43,7 +64,8 @@ DISK_PATH="$PWD/disk"
 
 echo "Creating new VM with the name: $VM_NAME"
 sed -i "s/network.*/network  --bootproto=dhcp --device=link --ipv6=auto --activate --hostname=$VM_NAME/g" "$KICKSTART_URI"
-sed -i "s|url.*|url --url=$INSTALL_URI|g" "$KICKSTART_URI"
+sed -i "s|^url.*|url --url=$INSTALL_URI|g" "$KICKSTART_URI"
+sed -i "s|^REPO_BASE.*|REPO_BASE=$INSTALL_BASE_URL|g" "$KICKSTART_URI"
 sudo virt-install \
 	--connect qemu:///system \
 	--name $VM_NAME \
@@ -53,16 +75,17 @@ sudo virt-install \
 	--disk device=disk,path="$DISK_PATH/$VM_NAME-sys.raw",size=$SYS_DISK_SIZE,format=raw \
 	--disk device=disk,path="$DISK_PATH/$VM_NAME-data.raw",size=$DATA_DISK_SIZE,format=raw \
 	--os-variant rhel7 \
-	--location "$PWD/iso/centos7boot.iso" \
+	--location "$BOOT_ISO_FILE" \
 	--initrd-inject=$KICKSTART_URI \
 	--noautoconsole \
 	--graphics vnc,listen=0.0.0.0 \
 	--accelerate \
 	--network=bridge:virbr0 \
-	--extra-args=="ksdevice=link ks=file://$KICKSTART_FILE text console=tty0 console=ttyS0,115200 serial" \
+	--extra-args=="ksdevice=link ks=file://$KICKSTART_FILE text console=tty0 console=ttyS0,115200 serial REPO_BASE=$INSTALL_BASE_URL" \
 	--hvm || exit 1
 
 sudo virsh console $VM_NAME
+
 
 echo "Use:"
 echo "  sudo virsh start $VM_NAME --console"
